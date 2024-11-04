@@ -1,6 +1,7 @@
+use scraper::Html;
+use scraper::Selector;
 use std::{fs::File, io::Write, process::Command};
 
-use scraper::{Html, Selector};
 use serde::Deserialize;
 #[derive(Deserialize, Debug)]
 struct LeetcodeApi {
@@ -45,6 +46,7 @@ fn main() {
             .unwrap()
             .data
             .active_daily_coding_challenge_question;
+    // dbg!(&leetcode_api_response);
 
     // let link = leetcode_api_response
     //     .data
@@ -59,12 +61,12 @@ fn main() {
     // omit the one below for now
     // 4 - testcases
     // let mut args = args().into_iter().skip(1);
-    let question_link = format!("https://leetcode.com{}\n", leetcode_api_response.link);
+    let question_link = format!("https://leetcode.com{}", leetcode_api_response.link);
 
     let question_response = leetcode_api_response.question;
     let question_id = question_response.question_id;
     let title_slug = question_response.title_slug;
-    let difficulty = question_response.difficulty;
+    let difficulty = question_response.difficulty.to_lowercase();
     let quesion_content = question_response.content;
     let code_snippet = &question_response.code_snippets[15];
     // check if it is rust
@@ -74,26 +76,85 @@ fn main() {
         return;
     }
 
+    dbg!(&quesion_content);
     let document = Html::parse_document(&quesion_content);
+
+    // Selectors for input and output
+    // let example_block_selector = Selector::parse("div.example-block").unwrap();
+    // let input_selector =
+    //     Selector::parse("p strong:contains(\"Input:\") + span.example-io").unwrap();
+    // let output_selector =
+    //     Selector::parse("p strong:contains(\"Output:\") + span.example-io").unwrap();
+    //
+    // for example_block in document.select(&example_block_selector) {
+    //     // Extract input
+    //     if let Some(input_element) = example_block.select(&input_selector).next() {
+    //         println!("Input: {}", input_element.text().collect::<String>());
+    //     }
+    //
+    //     // Extract output
+    //     if let Some(output_element) = example_block.select(&output_selector).next() {
+    //         println!("Output: {}", output_element.text().collect::<String>());
+    //     }
+    // }
     // Selector for "Input" "Output" blocks
-    let example_selector = Selector::parse("pre").unwrap();
+    let example_selector = Selector::parse(".example-io").unwrap();
 
-    let mut examples = Vec::new();
+    let mut examples: Vec<String> = Vec::new();
 
-    for (idx, example) in document.select(&example_selector).enumerate() {
-        let input_output = example.text().collect::<String>();
-        // TODO:
-        // `input_output` needs better indentation, as intended, pun indented
-        let mut new_input_output = String::new();
-        for line in input_output.lines() {
-            new_input_output.push_str("\t\t\t\t");
-            new_input_output.push_str(line);
-            new_input_output.push('\n');
+    let examples_selector: Vec<_> = document.select(&example_selector).collect();
+    let mut i = 0;
+    while i < examples_selector.len() {
+        let input = examples_selector[i].text().collect::<String>();
+        let output = examples_selector[i + 1].text().collect::<String>();
+        let formatted = format!("let {};\n\t\tlet output = {};", input, output);
+        // add vecs
+        let formatted = formatted.replace("[", "vec![");
+        // add .to_string()
+        let mut new_formatted = String::new();
+        let mut skip = true;
+        for letter in formatted.chars() {
+            if letter == '"' {
+                if skip {
+                    skip = false;
+                } else {
+                    new_formatted.push_str("\".to_string()");
+                    skip = true;
+                    continue;
+                }
+            }
+            new_formatted.push(letter);
         }
-        let input_output = new_input_output.trim_end();
-        let example = format!("// Example {}:\n{}", idx + 1, input_output);
-        examples.push(example);
+        examples.push(new_formatted);
+        dbg!(input);
+        dbg!(output);
+        i += 2;
     }
+    dbg!(&examples);
+    // for (idx, example) in document.select(&example_selector).enumerate() {
+    // let input_output = example.text().collect::<String>();
+    // dbg!(&input_output);
+    // TODO:
+    // `input_output` needs better indentation, as intended, pun indented
+    //
+    // let mut new_input_output = String::new();
+    // for line in input_output.lines() {
+    //     new_input_output.push_str("\t\t\t\t");
+    //     new_input_output.push_str(line);
+    //     new_input_output.push('\n');
+    // }
+    //
+    // let mut lines = input_output.lines();
+    // let input = format!("\t\t\t\t{};\n", lines.next().unwrap());
+    // let input = input.replace("Input:", "let ");
+    // let output = format!("\t\t\t\t{};", lines.next().unwrap());
+    // let output = output.replace("Output:", "let output = ");
+    // let input_output = format!("{}{}", input, output);
+    // let example = format!("// Example {}:\n{}", idx + 1, input_output);
+    //     examples.push(example);
+    // }
+    // println!("{:?}", examples);
+
     let file_path = format!("{}_{}_{}", title_slug, question_id, difficulty);
 
     let create_cargo_lib = Command::new("sh")
@@ -133,7 +194,7 @@ fn main() {
     let function_signature = &code_snippet.code;
 
     let function_signature =
-        function_signature.replace("{\n        \n    }\n}", "{\n\t\t\t\ttodo!();\n\t\t}\n}");
+        function_signature.replace("{\n        \n    }\n}", "{\n\t\ttodo!();\n\t}\n}");
 
     let mut test_cases = String::new();
 
@@ -166,7 +227,8 @@ struct Solution;
 #[cfg(test)]
 mod tests {{
     use super::*;{test_cases}
-}}"#
+}}
+"#
     );
 
     lib_file
@@ -207,4 +269,21 @@ mod tests {{
     // rust fmt at the end of the program, if all not formatted
     //
     // remove "Example 1, 2, 3" doesn't add anything
+    //
+    // TODO: for now
+    // 1 - [ ] Input output
+    // - [x] remove input and output and add ; at the end
+    // - [x] adjust the vecs by replacing '[' with 'vec!['
+    // - [x] adjust the strings by replacing to every second '"' with '".to_string()'
+    // - [ ] replace commas that are not in the input or in the vecs with '; let '
+    //
+    // TODO:
+    // 2 -
+    // - [ ] Solution::()
+    // - [ ] parse the function signature to split the between the brackets "()" by ','
+    // - [ ] get the index of '(' and the end of ')' and split by ',' for what's between them
+    //
+    // TODO:
+    // 3 - simple cleaning
+    // - [ ] replace all "\t" with spaces
 }
