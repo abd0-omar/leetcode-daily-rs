@@ -1,6 +1,7 @@
-use scraper::Html;
-use scraper::Selector;
+use anyhow::Context;
+use scraper::{Html, Selector};
 use std::{fs::File, io::Write, process::Command};
+use thiserror::Error;
 
 use serde::Deserialize;
 #[derive(Deserialize, Debug)]
@@ -38,29 +39,28 @@ struct Lang {
     code: String,
 }
 
-fn main() {
-    let leetcode_api_response =
-        reqwest::blocking::get("https://alfa-leetcode-api.onrender.com/dailyQuestion")
-            .unwrap()
-            .json::<LeetcodeApi>()
-            .unwrap()
-            .data
-            .active_daily_coding_challenge_question;
-    // dbg!(&leetcode_api_response);
+#[derive(Error, Debug)]
+pub enum ReqwestApiError {
+    #[error("Too many requests from this IP, try again in 1 hour")]
+    DecodeError(#[from] reqwest::Error),
 
-    // let link = leetcode_api_response
-    //     .data
-    //     .active_daily_coding_challenge_question
-    //     .link;
-    // dbg!(&link);
-    // we have the link
-    // cargo would generate
-    // 1 - file name would be title_slug, with maybe the difficulty
-    // 2 - comment at the top of the file with the link
-    // 3 - the rust function
-    // omit the one below for now
-    // 4 - testcases
-    // let mut args = args().into_iter().skip(1);
+    #[error("Reqwest failed to send a request, for some reason")]
+    UnexpectedError(#[source] reqwest::Error),
+}
+
+fn leetcode_reqwest() -> Result<DailyQuestion, ReqwestApiError> {
+    let response = reqwest::blocking::get("https://alfa-leetcode-api.onrender.com/dailyQuestion")
+        .map_err(ReqwestApiError::UnexpectedError)?;
+
+    let decoding_json = response
+        .json::<LeetcodeApi>()
+        .map_err(ReqwestApiError::DecodeError)?;
+
+    Ok(decoding_json.data.active_daily_coding_challenge_question)
+}
+
+fn main() -> Result<(), anyhow::Error> {
+    let leetcode_api_response = leetcode_reqwest().context("Failed api request")?;
     let question_link = format!("https://leetcode.com{}", leetcode_api_response.link);
 
     let question_response = leetcode_api_response.question;
@@ -73,87 +73,82 @@ fn main() {
     let lang = &code_snippet.lang;
     if lang != "Rust" {
         println!("not Rust!, 7asal 5er");
-        return;
+        return Ok(());
     }
 
-    dbg!(&quesion_content);
     let document = Html::parse_document(&quesion_content);
 
-    // Selectors for input and output
-    // let example_block_selector = Selector::parse("div.example-block").unwrap();
-    // let input_selector =
-    //     Selector::parse("p strong:contains(\"Input:\") + span.example-io").unwrap();
-    // let output_selector =
-    //     Selector::parse("p strong:contains(\"Output:\") + span.example-io").unwrap();
-    //
-    // for example_block in document.select(&example_block_selector) {
-    //     // Extract input
-    //     if let Some(input_element) = example_block.select(&input_selector).next() {
-    //         println!("Input: {}", input_element.text().collect::<String>());
-    //     }
-    //
-    //     // Extract output
-    //     if let Some(output_element) = example_block.select(&output_selector).next() {
-    //         println!("Output: {}", output_element.text().collect::<String>());
-    //     }
-    // }
-    // Selector for "Input" "Output" blocks
+    // sometimes it's <pre> sometimes it's <example-io> classes
     let example_selector = Selector::parse(".example-io").unwrap();
 
     let mut examples: Vec<String> = Vec::new();
 
     let examples_selector: Vec<_> = document.select(&example_selector).collect();
-    let mut i = 0;
-    while i < examples_selector.len() {
-        let input = examples_selector[i].text().collect::<String>();
-        let output = examples_selector[i + 1].text().collect::<String>();
-        let formatted = format!("let {};\n\t\tlet output = {};", input, output);
-        // add vecs
-        let formatted = formatted.replace("[", "vec![");
-        // add .to_string()
-        let mut new_formatted = String::new();
-        let mut skip = true;
-        for letter in formatted.chars() {
-            if letter == '"' {
-                if skip {
-                    skip = false;
-                } else {
-                    new_formatted.push_str("\".to_string()");
-                    skip = true;
-                    continue;
+    if !examples_selector.is_empty() {
+        let mut i = 0;
+        while i < examples_selector.len() {
+            let input = examples_selector[i].text().collect::<String>();
+            let output = examples_selector[i + 1].text().collect::<String>();
+            let formatted = format!("let {};\n\t\tlet output = {};", input, output);
+            // add vecs
+            let formatted = formatted.replace("[", "vec![");
+            // add .to_string()
+            let mut new_formatted = String::new();
+            let mut skip = true;
+            for letter in formatted.chars() {
+                if letter == '"' {
+                    if skip {
+                        skip = false;
+                    } else {
+                        new_formatted.push_str("\".to_string()");
+                        skip = true;
+                        continue;
+                    }
                 }
+                new_formatted.push(letter);
             }
-            new_formatted.push(letter);
+            examples.push(new_formatted);
+            dbg!(input);
+            dbg!(output);
+            i += 2;
         }
-        examples.push(new_formatted);
-        dbg!(input);
-        dbg!(output);
-        i += 2;
+    } else {
+        let example_selector = Selector::parse("pre").unwrap();
+        // let examples_selector: Vec<_> = document.select(&example_selector).collect();
+        for wow in document.select(&example_selector) {
+            let text: String = wow.text().collect();
+            let mut parts = text.split('\n');
+            let input = parts.next().unwrap();
+            let output = parts.next().unwrap();
+
+            // remove Input:
+            let input = input.replace("Input:", "");
+            // remove Output:
+            let output = output.replace("Output:", "");
+
+            let formatted = format!("let{};\n\t\tlet output ={};", input, output);
+            // add vecs
+            let formatted = formatted.replace("[", "vec![");
+            // add .to_string()
+            let mut new_formatted = String::new();
+            let mut skip = true;
+            for letter in formatted.chars() {
+                if letter == '"' {
+                    if skip {
+                        skip = false;
+                    } else {
+                        new_formatted.push_str("\".to_string()");
+                        skip = true;
+                        continue;
+                    }
+                }
+                new_formatted.push(letter);
+            }
+            examples.push(new_formatted);
+            dbg!(input);
+            dbg!(output);
+        }
     }
-    dbg!(&examples);
-    // for (idx, example) in document.select(&example_selector).enumerate() {
-    // let input_output = example.text().collect::<String>();
-    // dbg!(&input_output);
-    // TODO:
-    // `input_output` needs better indentation, as intended, pun indented
-    //
-    // let mut new_input_output = String::new();
-    // for line in input_output.lines() {
-    //     new_input_output.push_str("\t\t\t\t");
-    //     new_input_output.push_str(line);
-    //     new_input_output.push('\n');
-    // }
-    //
-    // let mut lines = input_output.lines();
-    // let input = format!("\t\t\t\t{};\n", lines.next().unwrap());
-    // let input = input.replace("Input:", "let ");
-    // let output = format!("\t\t\t\t{};", lines.next().unwrap());
-    // let output = output.replace("Output:", "let output = ");
-    // let input_output = format!("{}{}", input, output);
-    // let example = format!("// Example {}:\n{}", idx + 1, input_output);
-    //     examples.push(example);
-    // }
-    // println!("{:?}", examples);
 
     let file_path = format!("{}_{}_{}", title_slug, question_id, difficulty);
 
@@ -167,7 +162,7 @@ fn main() {
         println!("Successfully created {}", file_path);
     } else {
         eprintln!("Failed to create {}", file_path);
-        return;
+        return Ok(());
     }
 
     let lib_file_path = format!("{}/src/lib.rs", file_path);
@@ -182,7 +177,7 @@ fn main() {
         println!("Successfully cleared {}", lib_file_path);
     } else {
         eprintln!("Failed to clear {}", lib_file_path);
-        return;
+        return Ok(());
     }
 
     // File::create() docs
@@ -196,23 +191,46 @@ fn main() {
     let function_signature =
         function_signature.replace("{\n        \n    }\n}", "{\n\t\ttodo!();\n\t}\n}");
 
+    let first_bracket_in_func_signature = function_signature.find('(').unwrap();
+    let pure_function_name = &function_signature[27..first_bracket_in_func_signature];
+    let last_bracket_in_func_signature = function_signature.find(')').unwrap();
+
+    let slice =
+        &function_signature[first_bracket_in_func_signature + 1..last_bracket_in_func_signature];
+
+    let parts = slice.split_whitespace().collect::<Vec<_>>();
+
+    let mut function_name = String::new();
+
+    let mut i = 0;
+    while i < parts.len() {
+        if i == parts.len() - 2 {
+            function_name.push_str(&parts[i].replace(":", ""));
+        } else {
+            function_name.push_str(&parts[i].replace(":", ", "));
+        }
+        i += 2;
+    }
+
+    dbg!(&function_name);
+
     let mut test_cases = String::new();
 
     for (idx, example) in examples.into_iter().enumerate() {
         /*
-                 let result = Solution::{function_signature};
                 let output = // from the test cases;
+                let result = Solution::{function_signature};
+                result then output
+                RadiOhead
                 assert_eq!(result, output);
-
         */
-
-        // let example = example.trim_end();
         let test_case = format!(
             r#"
 
     #[test]
     fn it_works{idx}() {{
         {example}
+        let result = Solution::{pure_function_name}({function_name});
     }}"#
         );
         test_cases.push_str(&test_case);
@@ -278,12 +296,19 @@ mod tests {{
     // - [ ] replace commas that are not in the input or in the vecs with '; let '
     //
     // TODO:
-    // 2 -
-    // - [ ] Solution::()
-    // - [ ] parse the function signature to split the between the brackets "()" by ','
-    // - [ ] get the index of '(' and the end of ')' and split by ',' for what's between them
+    // 2 - [x] Solution::func_name(params)
+    // - [x] Solution::()
+    // - [x] parse the function signature to split the between the brackets "()" by ','
+    // - [x] get the index of '(' and the end of ')' and split by ',' for what's between them
     //
     // TODO:
     // 3 - simple cleaning
     // - [ ] replace all "\t" with spaces
+    // - [ ] add 2 allow deadcode above struct Solution and impl Solution
+    //
+    // TODO:
+    // 4 - Error handling
+    // - [x] reqwest
+    // - [ ] the rest
+    Ok(())
 }
