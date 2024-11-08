@@ -171,6 +171,20 @@ fn extract_examples(question_content: &str) -> Vec<String> {
 
             // comma separated inputs
             let input = input.replace(", ", "; let ");
+
+            // convert camelCase to snake_case
+            let input = {
+                let mut result = String::new();
+                for letter in input.chars() {
+                    if letter.is_uppercase() {
+                        result.push_str(&format!("_{}", letter.to_lowercase()));
+                        continue;
+                    }
+                    result.push(letter);
+                }
+                result
+            };
+
             let formatted = format!(
                 "let{};\n{FOUR_SPACES}{FOUR_SPACES}let output ={};",
                 input, output
@@ -306,12 +320,12 @@ fn write_to_lib_file(
 }
 
 // TODO:
-// 1 - [ ] Input output
 // 1 - [x] Input output
 // - [x] remove input and output and add ; at the end
 // - [x] adjust the vecs by replacing '[' with 'vec!['
 // - [x] adjust the strings by replacing to every second '"' with '".to_string()'
 // - [x] replace commas that are not in the input or in the vecs with '; let '
+// - [x] if input is camelCase then make it snake_case
 //
 // TODO:
 // 2 - [x] Solution::func_name(params)
@@ -320,11 +334,15 @@ fn write_to_lib_file(
 // - [x] get the index of '(' and the end of ')' and split by ',' for what's between them
 //
 // TODO:
-// 3 - [x] simple cleaning
+// 3 - [ ] simple cleaning
 // - [x] replace all "\t" with spaces
 // - [x] add 2 allow deadcode above struct Solution and impl Solution
+// - [ ] I guess I could benefit from more cleanup
 //
 // TODO:
 // 4 - [x] Error handling
 // - [x] reqwest
 // - [x] the rest
+//
+// TODO:
+// 5 - [ ] make structs to be more organized
