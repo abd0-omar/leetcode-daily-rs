@@ -169,6 +169,8 @@ fn extract_examples(question_content: &str) -> Vec<String> {
                 .unwrap_or("")
                 .replace("Output:", "");
 
+            // comma separated inputs
+            let input = input.replace(", ", "; let ");
             let formatted = format!(
                 "let{};\n{FOUR_SPACES}{FOUR_SPACES}let output ={};",
                 input, output
@@ -305,10 +307,11 @@ fn write_to_lib_file(
 
 // TODO:
 // 1 - [ ] Input output
+// 1 - [x] Input output
 // - [x] remove input and output and add ; at the end
 // - [x] adjust the vecs by replacing '[' with 'vec!['
 // - [x] adjust the strings by replacing to every second '"' with '".to_string()'
-// - [ ] replace commas that are not in the input or in the vecs with '; let '
+// - [x] replace commas that are not in the input or in the vecs with '; let '
 //
 // TODO:
 // 2 - [x] Solution::func_name(params)
