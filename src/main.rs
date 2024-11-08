@@ -217,32 +217,35 @@ fn add_vec_and_to_string(input: String) -> String {
 }
 
 fn generate_test_cases(code_snippet: &Lang, examples: Vec<String>) -> (String, String) {
-    let function_signature = code_snippet.code.replace(
+    let function_signature_and_body = code_snippet.code.replace(
         &format!("\n{}{}\n", FOUR_SPACES, FOUR_SPACES),
         &format!("\n{}{}todo!();\n", FOUR_SPACES, FOUR_SPACES),
     );
 
-    let first_bracket_in_func_signature = function_signature
+    let first_bracket_in_func_signature = function_signature_and_body
         .find('(')
         .expect("for some reason there is no `(`");
-    let pure_function_name = &function_signature[27..first_bracket_in_func_signature];
-    let last_bracket_in_func_signature = function_signature
+    let pure_function_name = &function_signature_and_body[27..first_bracket_in_func_signature];
+    let last_bracket_in_func_signature = function_signature_and_body
         .find(')')
         .expect("for some reason there is no `)`");
 
-    let function_params =
-        &function_signature[first_bracket_in_func_signature + 1..last_bracket_in_func_signature];
+    let function_params_raw = &function_signature_and_body
+        [first_bracket_in_func_signature + 1..last_bracket_in_func_signature];
 
-    let function_params_parts = function_params.split_whitespace().collect::<Vec<_>>();
+    let function_params_parts_unformatted =
+        function_params_raw.split_whitespace().collect::<Vec<_>>();
 
-    let mut function_name = String::new();
+    let mut function_params_comma_formatted = String::new();
 
     let mut i = 0;
-    while i < function_params_parts.len() {
-        if i == function_params_parts.len() - 2 {
-            function_name.push_str(&function_params_parts[i].replace(":", ""));
+    while i < function_params_parts_unformatted.len() {
+        if i == function_params_parts_unformatted.len() - 2 {
+            function_params_comma_formatted
+                .push_str(&function_params_parts_unformatted[i].replace(":", ""));
         } else {
-            function_name.push_str(&function_params_parts[i].replace(":", ", "));
+            function_params_comma_formatted
+                .push_str(&function_params_parts_unformatted[i].replace(":", ", "));
         }
         i += 2;
     }
@@ -263,14 +266,14 @@ fn generate_test_cases(code_snippet: &Lang, examples: Vec<String>) -> (String, S
     #[test]
     fn it_works{idx}() {{
         {example}
-        let result = Solution::{pure_function_name}({function_name});
+        let result = Solution::{pure_function_name}({function_params_comma_formatted});
         assert_eq!(result, output);
     }}"#
         );
         test_cases.push_str(&test_case);
     }
 
-    (test_cases, function_signature)
+    (test_cases, function_signature_and_body)
 }
 
 #[derive(Error, Debug)]
@@ -292,7 +295,6 @@ fn write_to_lib_file(
     let mut lib_file =
         File::create(lib_file_path).map_err(CreateWriteLibFileError::CreateClearLibFile)?;
 
-    // Write the content to the file, handling any write errors.
     lib_file
         .write_all(file_content.as_bytes())
         .map_err(CreateWriteLibFileError::WriteToLibFile)?;
