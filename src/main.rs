@@ -169,21 +169,7 @@ fn extract_examples(question_content: &str) -> Vec<String> {
                 .unwrap_or("")
                 .replace("Output:", "");
 
-            // comma separated inputs
-            let input = input.replace(", ", "; let ");
-
-            // convert camelCase to snake_case
-            let input = {
-                let mut result = String::new();
-                for letter in input.chars() {
-                    if letter.is_uppercase() {
-                        result.push_str(&format!("_{}", letter.to_lowercase()));
-                        continue;
-                    }
-                    result.push(letter);
-                }
-                result
-            };
+            let input = comma_seperated_and_camel_case_to_snake_case(input);
 
             let formatted = format!(
                 "let{};\n{FOUR_SPACES}{FOUR_SPACES}let output ={};",
@@ -201,6 +187,8 @@ fn extract_examples(question_content: &str) -> Vec<String> {
             let input = examples_selector[i].text().collect::<String>();
             let output = examples_selector[i + 1].text().collect::<String>();
 
+            let input = comma_seperated_and_camel_case_to_snake_case(input);
+
             let formatted = format!(
                 "let {};\n{FOUR_SPACES}{FOUR_SPACES}let output = {};",
                 input, output
@@ -212,6 +200,22 @@ fn extract_examples(question_content: &str) -> Vec<String> {
     }
 
     examples
+}
+
+fn comma_seperated_and_camel_case_to_snake_case(input: String) -> String {
+    // comma separated inputs
+    let input = input.replace(", ", "; let ");
+
+    // convert camelCase to snake_case
+    let mut result = String::new();
+    for letter in input.chars() {
+        if letter.is_uppercase() {
+            result.push_str(&format!("_{}", letter.to_lowercase()));
+            continue;
+        }
+        result.push(letter);
+    }
+    result
 }
 
 fn add_vec_and_to_string(input: String) -> String {
@@ -338,6 +342,7 @@ fn write_to_lib_file(
 // - [x] replace all "\t" with spaces
 // - [x] add 2 allow deadcode above struct Solution and impl Solution
 // - [ ] I guess I could benefit from more cleanup
+// - [ ] add cargo format instead of manual indenting and adding spaces
 //
 // TODO:
 // 4 - [x] Error handling
