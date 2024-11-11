@@ -1,12 +1,20 @@
 use anyhow::Context;
 use scraper::{Html, Selector};
+use serde::Deserialize;
+use serde_json::json;
 use std::{fs::File, io::Write, process::Command};
 use thiserror::Error;
 
-const FOUR_SPACES: &str = "    ";
+const FOUR_SPACES: &'static str = "    ";
+const LEETCODE_API: &'static str = "https://leetcode.com/graphql/";
 
-fn main() -> Result<(), anyhow::Error> {
-    let leetcode_api_response = leetcode_reqwest().context("Failed api request")?;
+#[tokio::main]
+async fn main() -> Result<(), anyhow::Error> {
+    let leetcode_api_response = leetcode_reqwest()
+        .await
+        .context("Failed api request")?
+        .data
+        .active_daily_coding_challenge;
 
     let question_link = format!("https://leetcode.com{}", leetcode_api_response.link);
     let question_content = leetcode_api_response.question.content;
@@ -18,7 +26,6 @@ fn main() -> Result<(), anyhow::Error> {
         return Err(anyhow::Error::msg("not Rust!, 7asal 5er"));
     }
 
-    // file path
     let title_slug = leetcode_api_response.question.title_slug;
     let question_id = leetcode_api_response.question.question_id;
     let difficulty = leetcode_api_response.question.difficulty.to_lowercase();
@@ -40,20 +47,26 @@ fn main() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-use serde::Deserialize;
+#[derive(Deserialize)]
+struct QuestionData {
+    #[serde(rename(deserialize = "ActiveDailyCodingChallengeQuestion"))]
+    #[allow(dead_code)]
+    active_daily_coding_challenge_question: ActiveDailyCodingChallengeQuestion,
+}
+
 #[derive(Deserialize, Debug)]
-struct LeetcodeApi {
+struct GraphQlLeetcodeResponse {
     data: Data,
 }
 
 #[derive(Deserialize, Debug)]
 struct Data {
     #[serde(rename(deserialize = "activeDailyCodingChallengeQuestion"))]
-    active_daily_coding_challenge_question: DailyQuestion,
+    active_daily_coding_challenge: ActiveDailyCodingChallengeQuestion,
 }
 
 #[derive(Deserialize, Debug)]
-struct DailyQuestion {
+struct ActiveDailyCodingChallengeQuestion {
     link: String,
     question: Question,
 }
@@ -78,22 +91,48 @@ struct Lang {
 
 #[derive(Error, Debug)]
 pub enum ReqwestApiError {
-    #[error("Too many requests from this IP, try again in 1 hour")]
+    #[error("Failed to decode the JSON response")]
     DecodeError(#[from] reqwest::Error),
 
     #[error("Reqwest failed to send a request, for some reason")]
     UnexpectedError(#[source] reqwest::Error),
 }
 
-fn leetcode_reqwest() -> Result<DailyQuestion, ReqwestApiError> {
-    let response = reqwest::blocking::get("https://alfa-leetcode-api.onrender.com/dailyQuestion")
-        .map_err(ReqwestApiError::UnexpectedError)?;
+async fn leetcode_reqwest() -> Result<GraphQlLeetcodeResponse, ReqwestApiError> {
+    let query = r#" query questionOfToday {
+        activeDailyCodingChallengeQuestion {
+            link
+            question {
+                difficulty
+                titleSlug
+                content
+                questionId
+                codeSnippets {
+                    lang
+                    code
+                }
+            }
+        }
+    }
+    "#;
 
-    let decoding_json = response
-        .json::<LeetcodeApi>()
-        .map_err(ReqwestApiError::DecodeError)?;
+    let payload = json!(
+        {
+            "query" : query,
+            "variables" :{},
+            "operationName" : "questionOfToday"
+        }
+    );
 
-    Ok(decoding_json.data.active_daily_coding_challenge_question)
+    Ok(reqwest::Client::new()
+        .post(LEETCODE_API)
+        .json(&payload)
+        .send()
+        .await
+        .map_err(ReqwestApiError::UnexpectedError)?
+        .json::<GraphQlLeetcodeResponse>()
+        .await
+        .map_err(ReqwestApiError::DecodeError)?)
 }
 
 #[derive(Error, Debug)]
@@ -351,3 +390,6 @@ fn write_to_lib_file(
 //
 // TODO:
 // 5 - [ ] make structs to be more organized
+
+// TODO:
+// 6 - [x] add graphql straight from leetcode instead of the random rest api
