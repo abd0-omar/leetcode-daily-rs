@@ -30,19 +30,23 @@ async fn main() -> Result<(), anyhow::Error> {
     let question_id = leetcode_api_response.question.question_id;
     let difficulty = leetcode_api_response.question.difficulty.to_lowercase();
 
-    let file_path = format!("{}_{}_{}", title_slug, question_id, difficulty);
-    execute_command("cargo new --lib", &file_path).context(format!(
-        "Failed to create new cargo library `{}`",
-        file_path
-    ))?;
+    let dir_name = format!("{}_{}_{}", title_slug, question_id, difficulty);
+    execute_command("cargo new --lib", &dir_name)
+        .context(format!("Failed to create new cargo library `{}`", dir_name))?;
 
-    let lib_file_path = format!("{}/src/lib.rs", file_path);
+    let lib_file_path = format!("{}/src/lib.rs", dir_name);
     execute_command("echo '' >", &lib_file_path)
         .context(format!("Failed to clear contents of `{}`", lib_file_path))?;
 
     let file_content = generate_file_contents(&question_content, &question_link, code_snippet);
 
     write_to_lib_file(&file_content, &lib_file_path)?;
+
+    execute_command(
+        "cargo fmt --manifest-path",
+        &format!("{}/Cargo.toml", &dir_name),
+    )
+    .context(format!("Failed to format {}", &lib_file_path))?;
 
     Ok(())
 }
@@ -381,7 +385,7 @@ fn write_to_lib_file(
 // - [x] replace all "\t" with spaces
 // - [x] add 2 allow deadcode above struct Solution and impl Solution
 // - [ ] I guess I could benefit from more cleanup
-// - [ ] add cargo format instead of manual indenting and adding spaces
+// - [x] add cargo format instead of manual indenting and adding spaces
 //
 // TODO:
 // 4 - [x] Error handling
@@ -393,3 +397,8 @@ fn write_to_lib_file(
 
 // TODO:
 // 6 - [x] add graphql straight from leetcode instead of the random rest api
+
+// TODO:
+// 7 - [ ] add clap cli
+// - [ ] default option generate leecode daily
+// - [ ] option to generate leetcode proplem with id
