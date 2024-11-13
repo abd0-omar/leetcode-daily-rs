@@ -1,6 +1,7 @@
 mod api_request;
 mod execute_command;
 use api_request::*;
+use clap::Parser;
 use execute_command::*;
 
 use anyhow::Context;
@@ -10,8 +11,25 @@ use thiserror::Error;
 
 const FOUR_SPACES: &'static str = "    ";
 
+#[derive(Parser, Debug)]
+#[command(name = "leetcode tests t7t rgleek")]
+#[command(version = "1.0.0")]
+#[command(version, about = "lololololy", long_about = None)]
+// read from cargo file
+// https://docs.rs/clap/latest/clap/_derive/_tutorial/chapter_1/index.html#:~:text=You%20can%20use,from%20%60Cargo.toml%60
+struct Args {
+    #[arg(long)]
+    id: Option<u8>,
+}
+
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
+    let args = Args::parse();
+    dbg!(&args);
+
+    if let Some(id) = args.id {}
+    return Ok(());
+
     let leetcode_api_response = leetcode_reqwest()
         .await
         .context("Failed api request")?
@@ -42,7 +60,7 @@ async fn main() -> Result<(), anyhow::Error> {
     write_to_lib_file(&file_content, &lib_file_path)?;
 
     let cargo_path = format!("{}/Cargo.toml", &dir_name);
-    CommandStructure::new("cargo fmt --manifest--path", &cargo_path)
+    CommandStructure::new("cargo fmt --manifest-path", &cargo_path)
         .execute_command()
         .context(format!("Failed to format {}", &lib_file_path))?;
 
@@ -287,3 +305,10 @@ fn write_to_lib_file(
 // 7 - [ ] add clap cli
 // - [ ] default option generate leecode daily
 // - [ ] option to generate leetcode proplem with id
+
+// TODO:
+// 8 - [ ] support for more langs
+// - [ ] cpp
+// - [ ] python
+// - [ ] javascript, idk someone would do it for some reason
+// - won't add java, cuz it's java

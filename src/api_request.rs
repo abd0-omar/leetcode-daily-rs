@@ -105,3 +105,30 @@ pub async fn leetcode_reqwest() -> Result<GraphQlLeetcodeResponse, ReqwestApiErr
         .await
         .map_err(ReqwestApiError::DecodeError)?)
 }
+
+pub async fn leetcode_reqwest_with_id() -> Result<GraphQlLeetcodeResponse, ReqwestApiError> {
+    let query = r#" query selectProblem($questionId: id!) {
+        question(questionId: $questionId) {
+            titleSlug
+        }
+    }
+    "#;
+
+    let payload = json!(
+        {
+            "query" : query,
+            "variables" :{},
+            "operationName" : "selectProblem"
+        }
+    );
+
+    Ok(reqwest::Client::new()
+        .post(LEETCODE_API)
+        .json(&payload)
+        .send()
+        .await
+        .map_err(ReqwestApiError::UnexpectedError)?
+        .json::<GraphQlLeetcodeResponse>()
+        .await
+        .map_err(ReqwestApiError::DecodeError)?)
+}

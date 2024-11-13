@@ -11,3 +11,4 @@ serde_json = "1.0.132"
 scraper = "0.21.0"
 anyhow = "1.0.93"
 thiserror = "2.0.3"
+clap = { version = "4.5.20", features = ["derive"] }
