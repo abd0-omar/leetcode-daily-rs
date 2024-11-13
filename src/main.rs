@@ -1,12 +1,14 @@
+mod api_request;
+mod execute_command;
+use api_request::*;
+use execute_command::*;
+
 use anyhow::Context;
 use scraper::{Html, Selector};
-use serde::Deserialize;
-use serde_json::json;
-use std::{fs::File, io::Write, process::Command};
+use std::{fs::File, io::Write};
 use thiserror::Error;
 
 const FOUR_SPACES: &'static str = "    ";
-const LEETCODE_API: &'static str = "https://leetcode.com/graphql/";
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
@@ -19,150 +21,32 @@ async fn main() -> Result<(), anyhow::Error> {
     let question_link = format!("https://leetcode.com{}", leetcode_api_response.link);
     let question_content = leetcode_api_response.question.content;
 
-    // Rust is the 15 indexed in the code_snippets vec
-    // check if it is rust
-    let code_snippet = &leetcode_api_response.question.code_snippets[15];
-    if code_snippet.lang != "Rust" {
-        return Err(anyhow::Error::msg("not Rust!, 7asal 5er"));
-    }
+    let code_snippet = Lang::try_parse(&leetcode_api_response.question.code_snippets)?;
 
     let title_slug = leetcode_api_response.question.title_slug;
     let question_id = leetcode_api_response.question.question_id;
     let difficulty = leetcode_api_response.question.difficulty.to_lowercase();
 
     let dir_name = format!("{}_{}_{}", title_slug, question_id, difficulty);
-    execute_command("cargo new --lib", &dir_name)
+    CommandStructure::new("cargo new --lib", &dir_name)
+        .execute_command()
         .context(format!("Failed to create new cargo library `{}`", dir_name))?;
 
     let lib_file_path = format!("{}/src/lib.rs", dir_name);
-    execute_command("echo '' >", &lib_file_path)
+    CommandStructure::new("echo '' >", &lib_file_path)
+        .execute_command()
         .context(format!("Failed to clear contents of `{}`", lib_file_path))?;
 
     let file_content = generate_file_contents(&question_content, &question_link, code_snippet);
 
     write_to_lib_file(&file_content, &lib_file_path)?;
 
-    execute_command(
-        "cargo fmt --manifest-path",
-        &format!("{}/Cargo.toml", &dir_name),
-    )
-    .context(format!("Failed to format {}", &lib_file_path))?;
+    let cargo_path = format!("{}/Cargo.toml", &dir_name);
+    CommandStructure::new("cargo fmt --manifest--path", &cargo_path)
+        .execute_command()
+        .context(format!("Failed to format {}", &lib_file_path))?;
 
     Ok(())
-}
-
-#[derive(Deserialize)]
-struct QuestionData {
-    #[serde(rename(deserialize = "ActiveDailyCodingChallengeQuestion"))]
-    #[allow(dead_code)]
-    active_daily_coding_challenge_question: ActiveDailyCodingChallengeQuestion,
-}
-
-#[derive(Deserialize, Debug)]
-struct GraphQlLeetcodeResponse {
-    data: Data,
-}
-
-#[derive(Deserialize, Debug)]
-struct Data {
-    #[serde(rename(deserialize = "activeDailyCodingChallengeQuestion"))]
-    active_daily_coding_challenge: ActiveDailyCodingChallengeQuestion,
-}
-
-#[derive(Deserialize, Debug)]
-struct ActiveDailyCodingChallengeQuestion {
-    link: String,
-    question: Question,
-}
-
-#[derive(Deserialize, Debug)]
-struct Question {
-    #[serde(rename(deserialize = "titleSlug"))]
-    title_slug: String,
-    content: String,
-    difficulty: String,
-    #[serde(rename(deserialize = "codeSnippets"))]
-    code_snippets: Vec<Lang>,
-    #[serde(rename(deserialize = "questionId"))]
-    question_id: String,
-}
-
-#[derive(Deserialize, Debug)]
-struct Lang {
-    lang: String,
-    code: String,
-}
-
-#[derive(Error, Debug)]
-pub enum ReqwestApiError {
-    #[error("Failed to decode the JSON response")]
-    DecodeError(#[from] reqwest::Error),
-
-    #[error("Reqwest failed to send a request, for some reason")]
-    UnexpectedError(#[source] reqwest::Error),
-}
-
-async fn leetcode_reqwest() -> Result<GraphQlLeetcodeResponse, ReqwestApiError> {
-    let query = r#" query questionOfToday {
-        activeDailyCodingChallengeQuestion {
-            link
-            question {
-                difficulty
-                titleSlug
-                content
-                questionId
-                codeSnippets {
-                    lang
-                    code
-                }
-            }
-        }
-    }
-    "#;
-
-    let payload = json!(
-        {
-            "query" : query,
-            "variables" :{},
-            "operationName" : "questionOfToday"
-        }
-    );
-
-    Ok(reqwest::Client::new()
-        .post(LEETCODE_API)
-        .json(&payload)
-        .send()
-        .await
-        .map_err(ReqwestApiError::UnexpectedError)?
-        .json::<GraphQlLeetcodeResponse>()
-        .await
-        .map_err(ReqwestApiError::DecodeError)?)
-}
-
-#[derive(Error, Debug)]
-enum CommandError {
-    #[error("Failed to execute the `{0}` process")]
-    ExecuteProcessError(#[from] std::io::Error),
-    #[error("Command `{0}` failed to execute successfully")]
-    CommandExecutionError(String),
-}
-
-fn execute_command(command: &str, file_path: &str) -> Result<(), CommandError> {
-    let status = Command::new("sh")
-        .arg("-c")
-        .arg(format!("{} {}", command, file_path))
-        .status()
-        .map_err(CommandError::ExecuteProcessError)?;
-
-    if status.success() {
-        println!("Command `{} {}` Successfully executed", command, file_path);
-        Ok(())
-    } else {
-        Err(CommandError::CommandExecutionError(format!(
-            "`{} {}`",
-            command, file_path
-        )))
-    }
 }
 
 fn generate_file_contents(
@@ -245,6 +129,7 @@ fn extract_examples(question_content: &str) -> Vec<String> {
     examples
 }
 
+// seperation of concerns
 fn comma_seperated_and_camel_case_to_snake_case(input: String) -> String {
     // comma separated inputs
     let input = input.replace(", ", "; let ");
