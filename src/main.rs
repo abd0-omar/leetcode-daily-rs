@@ -28,7 +28,7 @@ async fn main() -> Result<(), anyhow::Error> {
     dbg!(&args);
 
     if let Some(id) = args.id {}
-    return Ok(());
+    // return Ok(());
 
     let leetcode_api_response = leetcode_reqwest()
         .await
@@ -126,11 +126,32 @@ fn extract_examples(question_content: &str) -> Vec<String> {
     } else {
         let example_io_selector = Selector::parse(".example-io").unwrap();
         let examples_selector: Vec<_> = document.select(&example_io_selector).collect();
+        // edge case at this problem // https://leetcode.com/problems/find-the-power-of-k-size-subarrays-i/
+        for ex in &examples_selector {
+            dbg!(ex.text().collect::<String>());
+        }
 
         let mut i = 0;
         while i < examples_selector.len() {
+            let mut error_by_one = false;
+            dbg!(i);
             let input = examples_selector[i].text().collect::<String>();
-            let output = examples_selector[i + 1].text().collect::<String>();
+            // let output = examples_selector[i + 1].text().collect::<String>();
+            let output = {
+                if let Some(out) = examples_selector.get(i + 1) {
+                    let output_text = out.text().collect::<String>();
+                    if output_text.contains('=') {
+                        // then the "output" didn't get scraped, and instead it scraped the next
+                        // input
+                        error_by_one = true;
+                        "".to_string()
+                    } else {
+                        output_text.to_string()
+                    }
+                } else {
+                    "".to_string()
+                }
+            };
 
             let input = comma_seperated_and_camel_case_to_snake_case(input);
 
@@ -141,6 +162,9 @@ fn extract_examples(question_content: &str) -> Vec<String> {
             let formatted = add_vec_and_to_string(formatted);
             examples.push(formatted);
             i += 2;
+            if error_by_one {
+                i -= 1;
+            }
         }
     }
 
