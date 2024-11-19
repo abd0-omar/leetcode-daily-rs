@@ -5,7 +5,6 @@ const LEETCODE_API: &'static str = "https://leetcode.com/graphql/";
 
 #[derive(Deserialize)]
 struct QuestionData {
-    #[serde(rename(deserialize = "ActiveDailyCodingChallengeQuestion"))]
     #[allow(dead_code)]
     active_daily_coding_challenge_question: ActiveDailyCodingChallengeQuestion,
 }
@@ -16,9 +15,9 @@ pub struct GraphQlLeetcodeResponse {
 }
 
 #[derive(Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct Data {
-    #[serde(rename(deserialize = "activeDailyCodingChallengeQuestion"))]
-    pub active_daily_coding_challenge: ActiveDailyCodingChallengeQuestion,
+    pub active_daily_coding_challenge_question: ActiveDailyCodingChallengeQuestion,
 }
 
 #[derive(Deserialize, Debug)]
@@ -28,14 +27,12 @@ pub struct ActiveDailyCodingChallengeQuestion {
 }
 
 #[derive(Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct Question {
-    #[serde(rename(deserialize = "titleSlug"))]
     pub title_slug: String,
     pub content: String,
     pub difficulty: String,
-    #[serde(rename(deserialize = "codeSnippets"))]
     pub code_snippets: Vec<Lang>,
-    #[serde(rename(deserialize = "questionId"))]
     pub question_id: String,
 }
 
