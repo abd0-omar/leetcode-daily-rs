@@ -42,13 +42,33 @@ pub struct Lang {
     pub code: String,
 }
 
+// if snippet.lang != "Rust" {
+//     // search for rust
+//     for lang in code_snippets {
+//         if lang.lang == "Rust" {
+//             dbg!(lang);
+//             return Ok(lang);
+//         }
+//     }
+//     return Err(anyhow::Error::msg("no Rust!, 7asal 5er"));
+// } else {
+//     Ok(snippet)
+// }
+
 impl Lang {
     pub fn try_parse(code_snippets: &[Lang]) -> Result<&Lang, anyhow::Error> {
         // Rust is the 15 indexed in the code_snippets vec
         // check if it is rust
         if let Some(snippet) = code_snippets.get(15) {
             if snippet.lang != "Rust" {
-                return Err(anyhow::Error::msg("not Rust!, 7asal 5er"));
+                // search for rust
+                for lang in code_snippets {
+                    if lang.lang == "Rust" {
+                        dbg!(lang);
+                        return Ok(lang);
+                    }
+                }
+                return Err(anyhow::Error::msg("no Rust!, 7asal 5er"));
             }
             Ok(snippet)
         } else {
@@ -103,7 +123,17 @@ pub async fn leetcode_reqwest() -> Result<GraphQlLeetcodeResponse, ReqwestApiErr
         .map_err(ReqwestApiError::DecodeError)?)
 }
 
-pub async fn leetcode_reqwest_with_id() -> Result<GraphQlLeetcodeResponse, ReqwestApiError> {
+#[derive(Deserialize, Debug)]
+struct GraphQlIDLeetcode {
+    pub data: Data,
+}
+
+#[derive(Deserialize, Debug)]
+struct selectProblem {
+    pub question: Question,
+}
+
+pub async fn leetcode_reqwest_with_id(id: u8) -> Result<GraphQlLeetcodeResponse, ReqwestApiError> {
     let query = r#" query selectProblem($questionId: id!) {
         question(questionId: $questionId) {
             titleSlug
@@ -114,7 +144,9 @@ pub async fn leetcode_reqwest_with_id() -> Result<GraphQlLeetcodeResponse, Reqwe
     let payload = json!(
         {
             "query" : query,
-            "variables" :{},
+            "variables" :{
+                "id": id
+            },
             "operationName" : "selectProblem"
         }
     );

@@ -34,7 +34,7 @@ async fn main() -> Result<(), anyhow::Error> {
         .await
         .context("Failed api request")?
         .data
-        .active_daily_coding_challenge;
+        .active_daily_coding_challenge_question;
 
     let question_link = format!("https://leetcode.com{}", leetcode_api_response.link);
     let question_content = leetcode_api_response.question.content;
@@ -336,3 +336,45 @@ fn write_to_lib_file(
 // - [ ] python
 // - [ ] javascript, idk someone would do it for some reason
 // - won't add java, cuz it's java
+//
+// TODO:
+// 9 - [] bug that changes the input to camelCase
+// https://leetcode.com/problems/adding-spaces-to-a-string/
+//
+// TODO:
+// 10 - [ ] bug on binary trees
+// // https://leetcode.com/problems/reverse-odd-levels-of-binary-tree/
+//
+// TODO:
+// 11 - [ ] bug, when output is empty list, compiler doesn't know the type and can't infer it
+// // https://leetcode.com/problems/string-matching-in-an-array/description/
+//
+// TODO:
+// 12 - [ ] bug, example input is one letter uppercase 'A', so the cli converts it to '_a'
+// // https://leetcode.com/problems/find-the-prefix-common-array-of-two-arrays/description/
+// TODO:
+// 13 - [ ] bug, 2349. Design a Number Container System,
+// https://leetcode.com/problems/design-a-number-container-system/
+// [src/main.rs:28:5] &args = Args {
+//     id: None,
+// }
+//     Creating library `design-a-number-container-system_2434_medium` package
+// note: see more `Cargo.toml` keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+// Command: cargo new --lib, with arg: design-a-number-container-system_2434_medium
+//  Successfully executed
+// Command: echo '' >, with arg: design-a-number-container-system_2434_medium/src/lib.rs
+//  Successfully executed
+// Successfully wrote to lib design-a-number-container-system_2434_medium/src/lib.rs
+// error: expected identifier, found `}`
+//   --> /home/abdo/duck/leet-him-code/design-a-number-container-system_2434_medium/src/lib.rs:45:32
+//    |
+// 45 |         let result = Solution::}
+//    |                                ^ expected identifier
+//
+// Error: Failed to format design-a-number-container-system_2434_medium/src/lib.rs
+//
+// Caused by:
+//     `Command: cargo fmt --manifest-path, with arg: design-a-number-container-system_2434_medium/Cargo.toml
+//     ` failed to execute successfully
+//
+// 14 - [ ] count-days-without-meetings, the final test case doesn't have the expected output (which was the number zero)
